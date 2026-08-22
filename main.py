@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from datetime import date
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Depends
@@ -6,57 +7,65 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
-from database import UserRole, User, LeaveRequest, create_db_and_tables, engine
+from database import (
+    User,
+    UserRole,
+    LeaveRequest,
+    create_db_and_tables,
+    get_session,
+)
 
-from datetime import date
+# Import sub-routers
+from profile import router as profile_router
+from payroll import router as payroll_router
+from attendance import router as attendance_router
 
 
-# ── Lifespan (creates tables on startup) ──────────────────────────────────────
+# ── Lifespan (creates all DB tables on startup) ────────────────────────────────
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     create_db_and_tables()
     yield
 
-app = FastAPI(title="HRMS API", lifespan=lifespan)
+app = FastAPI(title="HRMS Backend API", lifespan=lifespan)
 
-# ── CORS (must be added before routes are hit by frontend) ────────────────────
-
+# Enable CORS for frontend integration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],        # hackathon speed — change if frontend uses credentials
-    allow_credentials=False,    # set True only if frontend fetch uses credentials: 'include'
+    allow_origins=["*"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-
-# ── Dependency ─────────────────────────────────────────────────────────────────
-
-def get_session():
-    with Session(engine) as session:
-        yield session
+# ── Include Sub-Routers ────────────────────────────────────────────────────────
+app.include_router(profile_router)
+app.include_router(payroll_router)
+app.include_router(attendance_router)
 
 
-# ── Request / Response schemas ─────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+# AUTHENTICATION
+# ══════════════════════════════════════════════════════════════════════════════
 
 class SignupRequest(BaseModel):
     email: str
     password: str
-    role: UserRole          # accepts only "employee" or "admin"
+    role: UserRole          # Only accepts "employee" or "admin"
+
 
 class LoginRequest(BaseModel):
     email: str
     password: str
+
 
 class AuthResponse(BaseModel):
     user_id: int
     role: str
 
 
-# ── Routes ─────────────────────────────────────────────────────────────────────
-
-@app.post("/signup", response_model=AuthResponse, status_code=201)
+@app.post("/signup", response_model=AuthResponse, status_code=201, tags=["Authentication"])
 def signup(data: SignupRequest, session: Session = Depends(get_session)):
     existing = session.exec(select(User).where(User.email == data.email)).first()
     if existing:
@@ -70,7 +79,7 @@ def signup(data: SignupRequest, session: Session = Depends(get_session)):
     return AuthResponse(user_id=user.id, role=user.role.value)
 
 
-@app.post("/login", response_model=AuthResponse)
+@app.post("/login", response_model=AuthResponse, tags=["Authentication"])
 def login(data: LoginRequest, session: Session = Depends(get_session)):
     user = session.exec(select(User).where(User.email == data.email)).first()
 
@@ -79,11 +88,10 @@ def login(data: LoginRequest, session: Session = Depends(get_session)):
 
     return AuthResponse(user_id=user.id, role=user.role.value)
 
-    # ══════════════════════════════════════════════════════════════════════════════
+
+# ══════════════════════════════════════════════════════════════════════════════
 # LEAVE MANAGEMENT
 # ══════════════════════════════════════════════════════════════════════════════
-
-# ── Schemas ────────────────────────────────────────────────────────────────────
 
 class LeaveApplyRequest(BaseModel):
     user_id: int
@@ -111,12 +119,9 @@ class LeaveResponse(BaseModel):
         from_attributes = True
 
 
-# ── Routes ─────────────────────────────────────────────────────────────────────
-
-@app.post("/leave/apply", response_model=LeaveResponse, status_code=201)
+@app.post("/leave/apply", response_model=LeaveResponse, status_code=201, tags=["Leave Management"])
 def apply_leave(data: LeaveApplyRequest, session: Session = Depends(get_session)):
-    """Employee applies for leave."""
-    # Verify the user exists
+    """Employee applies for leave (defaults to Pending)."""
     user = session.get(User, data.user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found.")
@@ -135,26 +140,25 @@ def apply_leave(data: LeaveApplyRequest, session: Session = Depends(get_session)
     return leave
 
 
-@app.get("/leave/{user_id}", response_model=list[LeaveResponse])
+@app.get("/leave/{user_id}", response_model=list[LeaveResponse], tags=["Leave Management"])
 def get_leaves_for_user(user_id: int, session: Session = Depends(get_session)):
-    """Employee view — all leave requests belonging to a specific user."""
+    """Employee view — all leave requests for a specific user."""
     user = session.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found.")
 
-    leaves = session.exec(
+    return session.exec(
         select(LeaveRequest).where(LeaveRequest.user_id == user_id)
     ).all()
-    return leaves
 
 
-@app.get("/leaves", response_model=list[LeaveResponse])
+@app.get("/leaves", response_model=list[LeaveResponse], tags=["Leave Management"])
 def get_all_leaves(session: Session = Depends(get_session)):
-    """Admin view — every leave request in the system."""
+    """Admin view — all leave requests across the company."""
     return session.exec(select(LeaveRequest)).all()
 
 
-@app.post("/leave/{leave_id}/approve", response_model=LeaveResponse)
+@app.post("/leave/{leave_id}/approve", response_model=LeaveResponse, tags=["Leave Management"])
 def approve_leave(
     leave_id: int,
     data: LeaveActionRequest,
@@ -173,7 +177,7 @@ def approve_leave(
     return leave
 
 
-@app.post("/leave/{leave_id}/reject", response_model=LeaveResponse)
+@app.post("/leave/{leave_id}/reject", response_model=LeaveResponse, tags=["Leave Management"])
 def reject_leave(
     leave_id: int,
     data: LeaveActionRequest,
