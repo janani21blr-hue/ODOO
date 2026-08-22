@@ -30,10 +30,12 @@ class Attendance(SQLModel, table=True):
 class LeaveRequest(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="user.id")
-    leave_type: str                      # e.g. "sick", "casual", "annual"
+    leave_type: str
     start_date: date
     end_date: date
-    status: str = "pending"             # "pending" | "approved" | "rejected"
+    status: str = "pending"
+    remarks: Optional[str] = None
+    admin_comment: Optional[str] = None
 
 # ── Helper ─────────────────────────────────────────────────────────────────────
 def create_db_and_tables():
