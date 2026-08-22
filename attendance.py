@@ -1,97 +1,102 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from typing import Optional
+from datetime import date, datetime
+from fastapi import APIRouter, HTTPException, Depends
+from pydantic import BaseModel
 from sqlmodel import Session, select
-from typing import List, Optional
-from datetime import datetime
 
-# Import Attendance model and get_session dependency from your team's database.py
-from database import get_session, Attendance, engine
+from database import User, Attendance, get_session
 
-router = APIRouter(
-    tags=["Attendance"]
-)
+router = APIRouter(tags=["Attendance Management"])
 
-@router.get("/attendance/{user_id}")
+# ── Schemas ────────────────────────────────────────────────────────────────────
+
+class AttendanceResponse(BaseModel):
+    id: int
+    user_id: int
+    date: date
+    status: str
+    check_in: Optional[datetime] = None
+    check_out: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class CheckInRequest(BaseModel):
+    user_id: int
+
+
+class CheckOutRequest(BaseModel):
+    user_id: int
+
+
+# ── Routes ─────────────────────────────────────────────────────────────────────
+
+@router.get("/attendance/{user_id}", response_model=list[AttendanceResponse])
 def get_user_attendance(user_id: int, session: Session = Depends(get_session)):
-    """
-    Get all attendance records for a specific user ID.
-    Exact team pattern: session.exec(select(Attendance)...).all()
-    """
-    statement = select(Attendance).where(Attendance.user_id == user_id)
-    return session.exec(statement).all()
+    """Employee view — all attendance records for a specific user."""
+    user = session.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    return session.exec(
+        select(Attendance).where(Attendance.user_id == user_id)
+    ).all()
 
 
-@router.get("/attendance")
-def get_all_attendance(
-    status: Optional[str] = Query(None),
-    target_date: Optional[str] = Query(None),
-    session: Session = Depends(get_session)
-):
-    """[Admin View] Get all attendance records with optional filters."""
-    statement = select(Attendance)
-    if status:
-        statement = statement.where(Attendance.status == status)
-    if target_date:
-        statement = statement.where(Attendance.date == target_date)
-    return session.exec(statement).all()
+@router.get("/attendances", response_model=list[AttendanceResponse])
+def get_all_attendance(session: Session = Depends(get_session)):
+    """Admin view — view attendance records of all employees."""
+    return session.exec(select(Attendance)).all()
 
 
-@router.post("/attendance/check-in")
-def check_in_employee(user_id: int, remarks: Optional[str] = None, session: Session = Depends(get_session)):
-    """[Employee Action] Record daily check-in."""
-    today_str = datetime.now().strftime("%Y-%m-%d")
-    now_time = datetime.now().strftime("%H:%M:%S")
+@router.post("/attendance/check-in", response_model=AttendanceResponse, status_code=201)
+def check_in(data: CheckInRequest, session: Session = Depends(get_session)):
+    """Employee action — daily check-in."""
+    user = session.get(User, data.user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found.")
 
+    today = date.today()
     existing = session.exec(
-        select(Attendance).where(Attendance.user_id == user_id, Attendance.date == today_str)
+        select(Attendance).where(Attendance.user_id == data.user_id, Attendance.date == today)
     ).first()
 
     if existing:
-        raise HTTPException(
-            status_code=400,
-            detail=f"User {user_id} has already checked in today at {existing.check_in}."
-        )
+        raise HTTPException(status_code=400, detail="User has already checked in today.")
 
-    new_record = Attendance(
-        user_id=user_id,
-        date=today_str,
-        status="Present",
-        check_in=now_time,
-        check_out=None,
-        remarks=remarks or "Checked in via Dayflow HRMS"
+    record = Attendance(
+        user_id=data.user_id,
+        date=today,
+        status="present",
+        check_in=datetime.now(),
+        check_out=None
     )
-
-    session.add(new_record)
+    session.add(record)
     session.commit()
-    session.refresh(new_record)
-    return new_record
+    session.refresh(record)
+    return record
 
 
-@router.post("/attendance/check-out")
-def check_out_employee(user_id: int, remarks: Optional[str] = None, session: Session = Depends(get_session)):
-    """[Employee Action] Record daily check-out."""
-    today_str = datetime.now().strftime("%Y-%m-%d")
-    now_time = datetime.now().strftime("%H:%M:%S")
+@router.post("/attendance/check-out", response_model=AttendanceResponse)
+def check_out(data: CheckOutRequest, session: Session = Depends(get_session)):
+    """Employee action — daily check-out."""
+    user = session.get(User, data.user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found.")
 
+    today = date.today()
     existing = session.exec(
-        select(Attendance).where(Attendance.user_id == user_id, Attendance.date == today_str)
+        select(Attendance).where(Attendance.user_id == data.user_id, Attendance.date == today)
     ).first()
 
     if not existing:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No check-in record found for User {user_id} today."
-        )
+        raise HTTPException(status_code=404, detail="No check-in record found for today. Please check-in first.")
 
     if existing.check_out is not None:
-        raise HTTPException(
-            status_code=400,
-            detail=f"User {user_id} has already checked out today at {existing.check_out}."
-        )
+        raise HTTPException(status_code=400, detail="User has already checked out today.")
 
-    existing.check_out = now_time
-    if remarks:
-        existing.remarks = remarks
-
+    existing.check_out = datetime.now()
     session.add(existing)
     session.commit()
     session.refresh(existing)
