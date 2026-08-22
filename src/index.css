@@ -14,6 +14,10 @@ body {
 }
 
 /* Custom scrollbars */
+  background-color: #f8fafc;
+}
+
+/* Custom smooth scroll and scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -27,6 +31,14 @@ body {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #475569;
+  background: #f1f5f9;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
 @keyframes fadeIn {

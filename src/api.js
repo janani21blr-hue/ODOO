@@ -1,4 +1,5 @@
 // API Client for HRMS Admin / HR Dashboard
+// API Client for HRMS Employee Portal
 const STORAGE_KEY_BACKEND = 'hrms_backend_url';
 export const DEFAULT_BACKEND_URL = 'https://implant-constrain-grapple.ngrok-free.dev';
 
@@ -33,6 +34,7 @@ async function handleResponse(response) {
 
   if (!response.ok) {
     let message = `Request failed with status ${response.status}`;
+    let message = `Request failed (${response.status})`;
     if (data && typeof data === 'object') {
       if (typeof data.detail === 'string') {
         message = data.detail;
@@ -54,6 +56,7 @@ async function handleResponse(response) {
 
 /**
  * 1. Admin Authentication
+ * 1. Authentication
  */
 export async function login(email, password) {
   const url = `${getBackendUrl()}/login`;
@@ -66,6 +69,7 @@ export async function login(email, password) {
 }
 
 export async function signup(email, password, role = 'admin') {
+export async function signup(email, password, role = 'employee') {
   const url = `${getBackendUrl()}/signup`;
   const res = await fetch(url, {
     method: 'POST',
@@ -80,6 +84,10 @@ export async function signup(email, password, role = 'admin') {
  */
 export async function getAllAttendance() {
   const url = `${getBackendUrl()}/attendances`;
+ * 2. Profile Management
+ */
+export async function getProfile(userId) {
+  const url = `${getBackendUrl()}/profile/${parseInt(userId, 10)}`;
   const res = await fetch(url, {
     method: 'GET',
     headers: getDefaultHeaders(),
@@ -95,6 +103,19 @@ export async function getAllLeaves() {
   const res = await fetch(url, {
     method: 'GET',
     headers: getDefaultHeaders(),
+export async function updateProfile(userId, profileData) {
+  const url = `${getBackendUrl()}/profile/${parseInt(userId, 10)}`;
+  const res = await fetch(url, {
+    method: 'PUT',
+    headers: getDefaultHeaders(),
+    body: JSON.stringify({
+      full_name: profileData.full_name || null,
+      phone: profileData.phone || null,
+      address: profileData.address || null,
+      job_title: profileData.job_title || null,
+      department: profileData.department || null,
+      profile_pic_url: profileData.profile_pic_url || null,
+    }),
   });
   return handleResponse(res);
 }
@@ -105,6 +126,15 @@ export async function approveLeave(leaveId, adminComment = null) {
     method: 'POST',
     headers: getDefaultHeaders(),
     body: JSON.stringify({ admin_comment: adminComment || null }),
+/**
+ * 3. Attendance Management
+ */
+export async function checkIn(userId) {
+  const url = `${getBackendUrl()}/attendance/check-in`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: getDefaultHeaders(),
+    body: JSON.stringify({ user_id: parseInt(userId, 10) }),
   });
   return handleResponse(res);
 }
@@ -115,6 +145,12 @@ export async function rejectLeave(leaveId, adminComment = null) {
     method: 'POST',
     headers: getDefaultHeaders(),
     body: JSON.stringify({ admin_comment: adminComment || null }),
+export async function checkOut(userId) {
+  const url = `${getBackendUrl()}/attendance/check-out`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: getDefaultHeaders(),
+    body: JSON.stringify({ user_id: parseInt(userId, 10) }),
   });
   return handleResponse(res);
 }
@@ -133,6 +169,8 @@ export async function actOnLeave(leaveId, action, adminComment = null) {
  */
 export async function getAllPayroll() {
   const url = `${getBackendUrl()}/payrolls`;
+export async function getMyAttendance(userId) {
+  const url = `${getBackendUrl()}/attendance/${parseInt(userId, 10)}`;
   const res = await fetch(url, {
     method: 'GET',
     headers: getDefaultHeaders(),
@@ -142,6 +180,11 @@ export async function getAllPayroll() {
 
 export async function setPayroll({ user_id, basic_salary, allowances = 0.0, deductions = 0.0 }) {
   const url = `${getBackendUrl()}/payroll`;
+/**
+ * 4. Leave Management
+ */
+export async function applyLeave({ user_id, leave_type, start_date, end_date, remarks }) {
+  const url = `${getBackendUrl()}/leave/apply`;
   const res = await fetch(url, {
     method: 'POST',
     headers: getDefaultHeaders(),
@@ -150,6 +193,10 @@ export async function setPayroll({ user_id, basic_salary, allowances = 0.0, dedu
       basic_salary: parseFloat(basic_salary),
       allowances: parseFloat(allowances || 0),
       deductions: parseFloat(deductions || 0),
+      leave_type,
+      start_date,
+      end_date,
+      remarks: remarks || null,
     }),
   });
   return handleResponse(res);
@@ -157,6 +204,29 @@ export async function setPayroll({ user_id, basic_salary, allowances = 0.0, dedu
 
 /**
  * 5. Health check
+export async function getMyLeaves(userId) {
+  const url = `${getBackendUrl()}/leave/${parseInt(userId, 10)}`;
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: getDefaultHeaders(),
+  });
+  return handleResponse(res);
+}
+
+/**
+ * 5. Payroll Management
+ */
+export async function getMyPayroll(userId) {
+  const url = `${getBackendUrl()}/payroll/${parseInt(userId, 10)}`;
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: getDefaultHeaders(),
+  });
+  return handleResponse(res);
+}
+
+/**
+ * 6. Health check
  */
 export async function checkHealth() {
   try {
