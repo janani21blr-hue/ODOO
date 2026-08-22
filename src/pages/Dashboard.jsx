@@ -1,37 +1,57 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  getAllAttendance, 
-  getAllLeaves, 
-  getAllPayroll, 
-  approveLeave, 
-  rejectLeave 
+import {
+  getAllAttendance,
+  getAllLeaves,
+  getAllPayroll,
+  approveLeave,
+  rejectLeave,
+  getProfile,
+  getMyAttendance,
+  getMyLeaves,
+  getMyPayroll,
+  checkIn,
+  checkOut
 } from '../api';
 import StatusBadge from '../components/StatusBadge';
-import { 
-  Clock, 
-  CheckSquare, 
-  Banknote, 
-  Users, 
-  ArrowRight, 
-  RefreshCw, 
-  AlertCircle, 
-  CheckCircle2, 
-  Check, 
-  X, 
-  TrendingUp,
-  MessageSquare
+import {
+  Clock,
+  CheckSquare,
+  Banknote,
+  ArrowRight,
+  RefreshCw,
+  AlertCircle,
+  CheckCircle2,
+  Check,
+  X,
+  MessageSquare,
+  User,
+  CalendarDays,
+  Receipt,
+  CheckCircle,
+  Sparkles
 } from 'lucide-react';
 
-export default function Dashboard({ onNavigate }) {
+export default function Dashboard({ user, onNavigate }) {
+  // ---------- Admin state ----------
   const [attendances, setAttendances] = useState([]);
   const [leaves, setLeaves] = useState([]);
   const [payrolls, setPayrolls] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [actionLoadingId, setActionLoadingId] = useState(null);
-  const [feedback, setFeedback] = useState(null);
-  const [commentModal, setCommentModal] = useState(null); // { id, action }
+  const [commentModal, setCommentModal] = useState(null); // { leave, action }
   const [adminComment, setAdminComment] = useState('');
 
+  // ---------- Employee state ----------
+  const [profile, setProfile] = useState(null);
+  const [payroll, setPayroll] = useState(null);
+  const [actionLoading, setActionLoading] = useState(false);
+
+  // ---------- Shared state ----------
+  const [isLoading, setIsLoading] = useState(true);
+  const [feedback, setFeedback] = useState(null);
+
+  const isAdmin = !user;
+
+  // ---------- Admin data fetch ----------
   const fetchAdminData = async () => {
     setIsLoading(true);
     setFeedback(null);
@@ -47,36 +67,12 @@ export default function Dashboard({ onNavigate }) {
       if (payRes.status === 'fulfilled') setPayrolls(payRes.value || []);
     } catch (err) {
       console.error('Error fetching admin data:', err);
-  getProfile, 
-  getMyAttendance, 
-  getMyLeaves, 
-  getMyPayroll, 
-  checkIn, 
-  checkOut 
-} from '../api';
-import StatusBadge from '../components/StatusBadge';
-import { 
-  User, 
-  Clock, 
-  CalendarDays, 
-  Receipt, 
-  CheckCircle, 
-  ArrowRight, 
-  Sparkles, 
-  RefreshCw,
-  TrendingUp,
-  AlertCircle
-} from 'lucide-react';
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-export default function Dashboard({ user, onNavigate }) {
-  const [profile, setProfile] = useState(null);
-  const [attendances, setAttendances] = useState([]);
-  const [leaves, setLeaves] = useState([]);
-  const [payroll, setPayroll] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [actionLoading, setActionLoading] = useState(false);
-  const [feedback, setFeedback] = useState(null);
-
+  // ---------- Employee data fetch ----------
   const fetchDashboardData = async () => {
     setIsLoading(true);
     setFeedback(null);
@@ -100,13 +96,17 @@ export default function Dashboard({ user, onNavigate }) {
   };
 
   useEffect(() => {
-    fetchAdminData();
-  }, []);
+    if (isAdmin) {
+      fetchAdminData();
+    } else if (user?.user_id) {
+      fetchDashboardData();
+    }
+  }, [user?.user_id]);
 
+  // ---------- Admin derived values ----------
   const pendingLeaves = leaves.filter((l) => (l.status || '').toLowerCase() === 'pending');
   const todayStr = new Date().toISOString().split('T')[0];
   const todayAttendances = attendances.filter((a) => a.date === todayStr);
-
   const totalPayrollExpenditure = payrolls.reduce((acc, curr) => acc + (curr.net_salary || 0), 0);
 
   const handleQuickAction = async (leaveId, action) => {
@@ -154,56 +154,9 @@ export default function Dashboard({ user, onNavigate }) {
     }
   };
 
-  return (
-    <div className="space-y-6 animate-fade-in">
-      
-      {/* Top Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-extrabold text-white tracking-tight">
-            Organization Status Dashboard
-          </h1>
-          <p className="text-xs text-slate-400">
-            System overview and instant approval queue
-          </p>
-        </div>
-
-        <button
-          onClick={fetchAdminData}
-          disabled={isLoading}
-          className="inline-flex items-center space-x-2 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-200 transition"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-          <span>Refresh Data</span>
-        </button>
-      </div>
-
-      {feedback && (
-        <div
-          className={`p-4 rounded-2xl text-xs font-semibold flex items-center justify-between animate-fade-in ${
-            feedback.type === 'success'
-              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-              : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
-          }`}
-        >
-          <div className="flex items-center space-x-2">
-            {feedback.type === 'success' ? (
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-            ) : (
-              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
-            )}
-            <span>{feedback.message}</span>
-          </div>
-          <button onClick={() => setFeedback(null)} className="text-slate-400 hover:text-white">
-            <X className="w-4 h-4" />
-    if (user?.user_id) {
-      fetchDashboardData();
-    }
-  }, [user?.user_id]);
-
-  // Today's attendance calculation
-  const todayStr = new Date().toISOString().split('T')[0];
+  // ---------- Employee derived values ----------
   const todayRecord = attendances.find((a) => a.date === todayStr);
+  const pendingLeavesCount = pendingLeaves.length;
 
   const handleQuickCheckIn = async () => {
     setActionLoading(true);
@@ -233,20 +186,295 @@ export default function Dashboard({ user, onNavigate }) {
     }
   };
 
-  const pendingLeavesCount = leaves.filter((l) => (l.status || '').toLowerCase() === 'pending').length;
-
   const formatTime = (ts) => {
     if (!ts) return '--:--';
     return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
+  // ===================== ADMIN VIEW =====================
+  if (isAdmin) {
+    return (
+      <div className="space-y-6 animate-fade-in">
+
+        {/* Top Banner */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-extrabold text-white tracking-tight">
+              Organization Status Dashboard
+            </h1>
+            <p className="text-xs text-slate-400">
+              System overview and instant approval queue
+            </p>
+          </div>
+
+          <button
+            onClick={fetchAdminData}
+            disabled={isLoading}
+            className="inline-flex items-center space-x-2 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-200 transition"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+            <span>Refresh Data</span>
+          </button>
+        </div>
+
+        {feedback && (
+          <div
+            className={`p-4 rounded-2xl text-xs font-semibold flex items-center justify-between animate-fade-in ${
+              feedback.type === 'success'
+                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+            }`}
+          >
+            <div className="flex items-center space-x-2">
+              {feedback.type === 'success' ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              ) : (
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+              )}
+              <span>{feedback.message}</span>
+            </div>
+            <button onClick={() => setFeedback(null)} className="text-slate-400 hover:text-white">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {/* KPI Cards Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-sm">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Pending Leaves</span>
+              <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center border border-amber-500/20">
+                <CheckSquare className="w-5 h-5" />
+              </div>
+            </div>
+            <p className="text-3xl font-black text-white">{pendingLeaves.length}</p>
+            <p className="text-[11px] text-amber-400 mt-1 font-medium">Requires admin decision</p>
+          </div>
+
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-sm">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Total Leave Records</span>
+              <div className="w-9 h-9 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center border border-blue-500/20">
+                <CheckSquare className="w-5 h-5" />
+              </div>
+            </div>
+            <p className="text-3xl font-black text-white">{leaves.length}</p>
+            <p className="text-[11px] text-slate-400 mt-1 font-medium">All applications submitted</p>
+          </div>
+
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-sm">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Today's Check-Ins</span>
+              <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center border border-emerald-500/20">
+                <Clock className="w-5 h-5" />
+              </div>
+            </div>
+            <p className="text-3xl font-black text-white">{todayAttendances.length}</p>
+            <p className="text-[11px] text-emerald-400 mt-1 font-medium">Employees present today</p>
+          </div>
+
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-sm">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Monthly Net Payroll</span>
+              <div className="w-9 h-9 rounded-xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center border border-cyan-500/20">
+                <Banknote className="w-5 h-5" />
+              </div>
+            </div>
+            <p className="text-2xl font-black text-white truncate">₹{totalPayrollExpenditure.toLocaleString('en-IN')}</p>
+            <p className="text-[11px] text-cyan-400 mt-1 font-medium">{payrolls.length} active structures</p>
+          </div>
+        </div>
+
+        {/* Main Content Sections */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+          <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-sm">
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center">
+                  <CheckSquare className="w-4 h-4" />
+                </div>
+                <h2 className="text-base font-bold text-white">Pending Leave Queue</h2>
+              </div>
+              <button
+                onClick={() => onNavigate('leaves')}
+                className="text-xs font-bold text-blue-400 hover:text-blue-300 flex items-center space-x-1"
+              >
+                <span>Full Approvals Table</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {pendingLeaves.length === 0 ? (
+              <div className="text-center py-12 text-slate-500 text-xs">
+                🎉 No pending leave requests! All applications have been reviewed.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {pendingLeaves.slice(0, 5).map((req) => (
+                  <div
+                    key={req.id}
+                    className="p-4 rounded-2xl bg-slate-800/60 border border-slate-700/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-800 transition"
+                  >
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-xs font-bold text-white">
+                          User #{req.user_id}
+                        </span>
+                        <span className="text-xs px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-400 font-medium">
+                          {req.leave_type}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 font-mono mt-1">
+                        {req.start_date} → {req.end_date}
+                      </p>
+                      {req.remarks && (
+                        <p className="text-xs text-slate-300 mt-1 italic">
+                          "{req.remarks}"
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex items-center space-x-2 shrink-0">
+                      <button
+                        onClick={() => handleOpenCommentModal(req, 'approve')}
+                        disabled={actionLoadingId === req.id}
+                        className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition flex items-center space-x-1"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Approve</span>
+                      </button>
+                      <button
+                        onClick={() => handleOpenCommentModal(req, 'reject')}
+                        disabled={actionLoadingId === req.id}
+                        className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition flex items-center space-x-1"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                        <span>Reject</span>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-4">
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-sm">
+              <h2 className="text-sm font-bold uppercase tracking-wider text-slate-400 mb-4">
+                Management Modules
+              </h2>
+
+              <div className="space-y-2.5">
+                <button
+                  onClick={() => onNavigate('attendance')}
+                  className="w-full p-3.5 rounded-2xl bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 flex items-center justify-between text-xs font-bold text-slate-200 transition group"
+                >
+                  <div className="flex items-center space-x-3">
+                    <Clock className="w-4 h-4 text-emerald-400" />
+                    <span>Attendance Ledger</span>
+                  </div>
+                  <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-white transition" />
+                </button>
+
+                <button
+                  onClick={() => onNavigate('leaves')}
+                  className="w-full p-3.5 rounded-2xl bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 flex items-center justify-between text-xs font-bold text-slate-200 transition group"
+                >
+                  <div className="flex items-center space-x-3">
+                    <CheckSquare className="w-4 h-4 text-amber-400" />
+                    <span>Leave Approvals</span>
+                  </div>
+                  <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-white transition" />
+                </button>
+
+                <button
+                  onClick={() => onNavigate('payroll')}
+                  className="w-full p-3.5 rounded-2xl bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 flex items-center justify-between text-xs font-bold text-slate-200 transition group"
+                >
+                  <div className="flex items-center space-x-3">
+                    <Banknote className="w-4 h-4 text-cyan-400" />
+                    <span>Payroll Management</span>
+                  </div>
+                  <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-white transition" />
+                </button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        {/* Decision with Comment Modal */}
+        {commentModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl text-slate-100">
+              <h3 className="text-base font-bold text-white mb-1 flex items-center space-x-2">
+                <MessageSquare className="w-5 h-5 text-blue-400" />
+                <span>
+                  {commentModal.action === 'approve' ? 'Approve Leave Request' : 'Reject Leave Request'}
+                </span>
+              </h3>
+              <p className="text-xs text-slate-400 mb-4">
+                Leave #{commentModal.leave.id} for Employee #{commentModal.leave.user_id} ({commentModal.leave.leave_type})
+              </p>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
+                    Admin Remarks / Comment (Optional)
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={adminComment}
+                    onChange={(e) => setAdminComment(e.target.value)}
+                    placeholder={
+                      commentModal.action === 'approve'
+                        ? 'e.g. Approved. Ensure handover is completed.'
+                        : 'e.g. Insufficient leave balance or critical sprint deadline.'
+                    }
+                    className="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 text-xs text-white placeholder-slate-500"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end space-x-2 pt-2 border-t border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setCommentModal(null)}
+                    className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-white"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirmActionWithComment}
+                    className={`px-5 py-2 rounded-xl text-xs font-bold text-white shadow-lg transition ${
+                      commentModal.action === 'approve'
+                        ? 'bg-emerald-600 hover:bg-emerald-500'
+                        : 'bg-rose-600 hover:bg-rose-500'
+                    }`}
+                  >
+                    Confirm {commentModal.action === 'approve' ? 'Approval' : 'Rejection'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+      </div>
+    );
+  }
+
+  // ===================== EMPLOYEE VIEW =====================
   return (
     <div className="space-y-6 animate-fade-in">
-      
+
       {/* Welcome Banner */}
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-700 p-6 sm:p-8 text-white shadow-xl shadow-emerald-900/10">
         <div className="absolute -right-8 -bottom-8 w-64 h-64 rounded-full bg-white/10 blur-2xl pointer-events-none" />
-        
+
         <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1.5">
             <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-white/15 backdrop-blur-md text-xs font-semibold tracking-wide">
@@ -302,59 +530,9 @@ export default function Dashboard({ user, onNavigate }) {
         </div>
       )}
 
-      {/* KPI Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        
-        {/* Pending Approvals */}
-        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-sm">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Pending Leaves</span>
-            <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center border border-amber-500/20">
-              <CheckSquare className="w-5 h-5" />
-            </div>
-          </div>
-          <p className="text-3xl font-black text-white">{pendingLeaves.length}</p>
-          <p className="text-[11px] text-amber-400 mt-1 font-medium">Requires admin decision</p>
-        </div>
-
-        {/* Total Leaves */}
-        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-sm">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Total Leave Records</span>
-            <div className="w-9 h-9 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center border border-blue-500/20">
-              <CheckSquare className="w-5 h-5" />
-            </div>
-          </div>
-          <p className="text-3xl font-black text-white">{leaves.length}</p>
-          <p className="text-[11px] text-slate-400 mt-1 font-medium">All applications submitted</p>
-        </div>
-
-        {/* Attendance Today */}
-        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-sm">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Today's Check-Ins</span>
-            <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center border border-emerald-500/20">
-              <Clock className="w-5 h-5" />
-            </div>
-          </div>
-          <p className="text-3xl font-black text-white">{todayAttendances.length}</p>
-          <p className="text-[11px] text-emerald-400 mt-1 font-medium">Employees present today</p>
-        </div>
-
-        {/* Total Payroll */}
-        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-sm">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Monthly Net Payroll</span>
-            <div className="w-9 h-9 rounded-xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center border border-cyan-500/20">
-              <Banknote className="w-5 h-5" />
-            </div>
-          </div>
-          <p className="text-2xl font-black text-white truncate">₹{totalPayrollExpenditure.toLocaleString('en-IN')}</p>
-          <p className="text-[11px] text-cyan-400 mt-1 font-medium">{payrolls.length} active structures</p>
       {/* Quick Glance Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        
-        {/* Card 1: Attendance Today */}
+
         <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm hover:shadow-md transition">
           <div className="flex items-center justify-between mb-4">
             <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
@@ -372,9 +550,9 @@ export default function Dashboard({ user, onNavigate }) {
               </span>
             )}
           </div>
-          
+
           <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider">Today's Attendance</h3>
-          
+
           <div className="my-3">
             {todayRecord ? (
               <div className="space-y-1">
@@ -417,7 +595,6 @@ export default function Dashboard({ user, onNavigate }) {
           </div>
         </div>
 
-        {/* Card 2: Leave Overview */}
         <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm hover:shadow-md transition">
           <div className="flex items-center justify-between mb-4">
             <div className="w-12 h-12 rounded-2xl bg-teal-50 text-teal-600 flex items-center justify-center">
@@ -445,7 +622,6 @@ export default function Dashboard({ user, onNavigate }) {
           </div>
         </div>
 
-        {/* Card 3: Payroll Overview */}
         <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm hover:shadow-md transition">
           <div className="flex items-center justify-between mb-4">
             <div className="w-12 h-12 rounded-2xl bg-cyan-50 text-cyan-600 flex items-center justify-center">
@@ -479,79 +655,9 @@ export default function Dashboard({ user, onNavigate }) {
 
       </div>
 
-      {/* Main Content Sections */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Pending Approvals Action Queue (2 cols) */}
-        <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-5">
-            <div className="flex items-center space-x-2.5">
-              <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center">
-                <CheckSquare className="w-4 h-4" />
-              </div>
-              <h2 className="text-base font-bold text-white">Pending Leave Queue</h2>
-            </div>
-            <button
-              onClick={() => onNavigate('leaves')}
-              className="text-xs font-bold text-blue-400 hover:text-blue-300 flex items-center space-x-1"
-            >
-              <span>Full Approvals Table</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          {pendingLeaves.length === 0 ? (
-            <div className="text-center py-12 text-slate-500 text-xs">
-              🎉 No pending leave requests! All applications have been reviewed.
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {pendingLeaves.slice(0, 5).map((req) => (
-                <div
-                  key={req.id}
-                  className="p-4 rounded-2xl bg-slate-800/60 border border-slate-700/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-800 transition"
-                >
-                  <div>
-                    <div className="flex items-center space-x-2">
-                      <span className="text-xs font-bold text-white">
-                        User #{req.user_id}
-                      </span>
-                      <span className="text-xs px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-400 font-medium">
-                        {req.leave_type}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-400 font-mono mt-1">
-                      {req.start_date} → {req.end_date}
-                    </p>
-                    {req.remarks && (
-                      <p className="text-xs text-slate-300 mt-1 italic">
-                        "{req.remarks}"
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="flex items-center space-x-2 shrink-0">
-                    <button
-                      onClick={() => handleOpenCommentModal(req, 'approve')}
-                      disabled={actionLoadingId === req.id}
-                      className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition flex items-center space-x-1"
-                    >
-                      <Check className="w-3.5 h-3.5" />
-                      <span>Approve</span>
-                    </button>
-                    <button
-                      onClick={() => handleOpenCommentModal(req, 'reject')}
-                      disabled={actionLoadingId === req.id}
-                      className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition flex items-center space-x-1"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                      <span>Reject</span>
-                    </button>
-                  </div>
       {/* Two column recent activities */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        
-        {/* Recent Leaves */}
+
         <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-base font-bold text-slate-800 flex items-center space-x-2">
@@ -591,104 +697,6 @@ export default function Dashboard({ user, onNavigate }) {
           )}
         </div>
 
-        {/* Quick Nav & Stats Shortcuts (1 col) */}
-        <div className="space-y-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-sm">
-            <h2 className="text-sm font-bold uppercase tracking-wider text-slate-400 mb-4">
-              Management Modules
-            </h2>
-
-            <div className="space-y-2.5">
-              <button
-                onClick={() => onNavigate('attendance')}
-                className="w-full p-3.5 rounded-2xl bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 flex items-center justify-between text-xs font-bold text-slate-200 transition group"
-              >
-                <div className="flex items-center space-x-3">
-                  <Clock className="w-4 h-4 text-emerald-400" />
-                  <span>Attendance Ledger</span>
-                </div>
-                <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-white transition" />
-              </button>
-
-              <button
-                onClick={() => onNavigate('leaves')}
-                className="w-full p-3.5 rounded-2xl bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 flex items-center justify-between text-xs font-bold text-slate-200 transition group"
-              >
-                <div className="flex items-center space-x-3">
-                  <CheckSquare className="w-4 h-4 text-amber-400" />
-                  <span>Leave Approvals</span>
-                </div>
-                <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-white transition" />
-              </button>
-
-              <button
-                onClick={() => onNavigate('payroll')}
-                className="w-full p-3.5 rounded-2xl bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 flex items-center justify-between text-xs font-bold text-slate-200 transition group"
-              >
-                <div className="flex items-center space-x-3">
-                  <Banknote className="w-4 h-4 text-cyan-400" />
-                  <span>Payroll Management</span>
-                </div>
-                <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-white transition" />
-              </button>
-            </div>
-          </div>
-        </div>
-
-      </div>
-
-      {/* Decision with Comment Modal */}
-      {commentModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl text-slate-100">
-            <h3 className="text-base font-bold text-white mb-1 flex items-center space-x-2">
-              <MessageSquare className="w-5 h-5 text-blue-400" />
-              <span>
-                {commentModal.action === 'approve' ? 'Approve Leave Request' : 'Reject Leave Request'}
-              </span>
-            </h3>
-            <p className="text-xs text-slate-400 mb-4">
-              Leave #{commentModal.leave.id} for Employee #{commentModal.leave.user_id} ({commentModal.leave.leave_type})
-            </p>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
-                  Admin Remarks / Comment (Optional)
-                </label>
-                <textarea
-                  rows={3}
-                  value={adminComment}
-                  onChange={(e) => setAdminComment(e.target.value)}
-                  placeholder={
-                    commentModal.action === 'approve'
-                      ? 'e.g. Approved. Ensure handover is completed.'
-                      : 'e.g. Insufficient leave balance or critical sprint deadline.'
-                  }
-                  className="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 text-xs text-white placeholder-slate-500"
-                />
-              </div>
-
-              <div className="flex items-center justify-end space-x-2 pt-2 border-t border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setCommentModal(null)}
-                  className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-white"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleConfirmActionWithComment}
-                  className={`px-5 py-2 rounded-xl text-xs font-bold text-white shadow-lg transition ${
-                    commentModal.action === 'approve'
-                      ? 'bg-emerald-600 hover:bg-emerald-500'
-                      : 'bg-rose-600 hover:bg-rose-500'
-                  }`}
-                >
-                  Confirm {commentModal.action === 'approve' ? 'Approval' : 'Rejection'}
-                </button>
-        {/* Profile Card Preview */}
         <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-base font-bold text-slate-800 flex items-center space-x-2">
@@ -727,10 +735,10 @@ export default function Dashboard({ user, onNavigate }) {
             </div>
           </div>
         </div>
-      )}
 
       </div>
 
     </div>
   );
 }
+
